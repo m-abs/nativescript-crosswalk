@@ -1,0 +1,9 @@
+<Page
+  xmlns="http://schemas.nativescript.org/tns.xsd"
+  xmlns:xwalk="nativescript-crosswalk"
+  loaded="pageLoaded"
+>
+  <StackLayout id="container">
+    <xwalk:XWalkWebView src="http://google.dk"/>
+  </StackLayout>
+</Page>
