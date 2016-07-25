@@ -12,10 +12,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "demo.ios": "npm run preparedemo && cd demo && tns emulate ios",
-    "demo.android": "npm run preparedemo && cd demo && tns run android",
-    "preparedemo": "npm run build && cd demo && (tns plugin remove nativescript-crosswalk || echo 'not installed') && tns plugin add .. && tns install",
-    "setup": "cd demo && npm install && cd .. && npm run build && cd demo && tns plugin add .. && cd .."
+    "demo.ios": "npm run preparedemo && cd ../demo && tns emulate ios",
+    "demo.android": "npm run preparedemo && cd ../demo && tns run android",
+    "preparedemo": "npm run build && cd ../demo && (tns plugin remove nativescript-crosswalk || echo 'not installed') && tns plugin add ../nativescript-crosswalk && tns install",
+    "setup": "cd ../demo && npm install && cd ../nativescript-crosswalk && npm run build && cd ../demo && tns plugin add ../nativescript-crosswalk && cd ../nativescript-crosswalk"
   },
   "repository": {
     "type": "git",
@@ -46,6 +46,7 @@
     "typescript": "^1.8.10"
   },
   "files": [
+    "platforms/*",
     "index.d.ts",
     "xwalkwebview.android.d.ts",
     "xwalkwebview.android.js",

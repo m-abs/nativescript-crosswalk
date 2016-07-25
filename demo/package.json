@@ -9,7 +9,7 @@
     }
   },
   "dependencies": {
-    "nativescript-crosswalk": "file:..",
+    "nativescript-crosswalk": "file:../nativescript-crosswalk",
     "tns-core-modules": "^2.1.0"
   },
   "devDependencies": {

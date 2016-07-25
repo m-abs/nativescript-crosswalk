@@ -4,6 +4,6 @@
   loaded="pageLoaded"
 >
   <StackLayout id="container">
-    <xwalk:XWalkWebView src="http://google.dk"/>
+    <xwalk:XWalkWebView src="https://mabs.dk"/>
   </StackLayout>
 </Page>

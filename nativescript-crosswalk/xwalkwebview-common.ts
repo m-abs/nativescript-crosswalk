@@ -4,13 +4,12 @@ import dependencyObservable = require('ui/core/dependency-observable');
 import proxy = require('ui/core/proxy');
 import * as utils from 'utils/utils';
 import * as trace from 'trace';
-import * as fileSystemModule from 'file-system';
+import * as fs from 'file-system';
 
-let fs: typeof fileSystemModule;
-function ensureFS() {
-  if (!fs) {
-    fs = require('file-system');
-  }
+export interface ProgressEventData {
+  eventName: string,
+  object: XWalkWebViewBase,
+  progress: number;
 }
 
 const urlProperty = new dependencyObservable.Property(
@@ -51,8 +50,6 @@ function onSrcPropertyChanged(data: dependencyObservable.PropertyChangeData) {
   trace.write(`XWalkWebViewBase._loadSrc(${src})`, trace.categories.Debug);
 
   if (utils.isFileOrResourcePath(src)) {
-    ensureFS();
-
     if (src.indexOf('~/') === 0) {
       src = fs.path.join(fs.knownFolders.currentApp().path, src.replace('~/', ''));
     }
@@ -83,6 +80,7 @@ export interface JavaScriptCallback {
 export abstract class XWalkWebViewBase extends View implements IWebView {
   public static loadStartedEvent = 'loadStarted';
   public static loadFinishedEvent = 'loadFinished';
+  public static progressChangedEvent = 'progressChanged';
 
   public static urlProperty = urlProperty;
   public static srcProperty = srcProperty;
@@ -182,7 +180,7 @@ export abstract class XWalkWebViewBase extends View implements IWebView {
   }
 
   public _onDetached(force?: boolean) {
-    super._onDetached(force);
+    (<any>View.prototype)._onDetached.call(this, force);
   }
 
   public static navigationTypes = [
@@ -193,4 +191,14 @@ export abstract class XWalkWebViewBase extends View implements IWebView {
     'formResubmitted',
     'other',
   ];
+
+  public _onProgressChanged(progress: number) {
+    const args = <ProgressEventData>{
+      eventName: XWalkWebViewBase.progressChangedEvent,
+      object: this,
+      progress,
+    };
+
+    this.notify(args);
+  }
 }

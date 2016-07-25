@@ -4,6 +4,20 @@ import {XWalkWebViewBase, JavaScriptCallback} from './xwalkwebview-common';
 export declare namespace org {
   export namespace xwalk {
     export namespace core {
+      export class XWalkPreferences {
+        static ALLOW_UNIVERSAL_ACCESS_FROM_FILE: string;
+        static ANIMATABLE_XWALK_VIEW: string;
+        static JAVASCRIPT_CAN_OPEN_WINDOW: string;
+        static PROFILE_NAME: string;
+        static REMOTE_DEBUGGING: string;
+        static SUPPORT_MULTIPLE_WINDOWS: string;
+
+        static getBooleanValue(key: string): boolean;
+        static getIntegerValue(key: string): number;
+        static getStringValue(key: string): string;
+        static setValue(key: string, value: boolean|number|string);
+      }
+
       export class XWalkView {
         constructor(context: any);
         setResourceClient(client: XWalkResourceClient);
@@ -51,10 +65,12 @@ export declare namespace org {
 
       export class XWalkResourceClient {
         constructor(view: XWalkView);
-        onPageStarted(view: XWalkView, url: string, favicon: android.graphics.Bitmap);
-        onPageFinished(view: XWalkView, url: string);
+        onLoadStarted(view: XWalkView, url: string);
+        onLoadFinished(view: XWalkView, url: string);
         onReceivedLoadError(view: XWalkView, errorCode: number, description: string, failingUrl: string);
         onReceivedSslError(view: XWalkView, callback: (value: boolean) => void, error: android.net.http.SslError);
+        shouldInterceptLoadRequest(view: XWalkView, url: string): android.webkit.WebResourceResponse;
+        shouldOverrideUrlLoading(view: XWalkView, url: string): boolean;
       }
 
       export class XWalkDownloadListener {
@@ -82,119 +98,110 @@ export declare namespace org {
 import * as trace from 'trace';
 import * as fs from 'file-system';
 
-let WebViewClientClass;
-function ensureWebViewClientClass() {
-  if (WebViewClientClass) {
-    return;
+class XWalkResourceClient extends org.xwalk.core.XWalkResourceClient {
+  constructor(private view: XWalkWebView) {
+    super(view.android);
+
+    return global.__native(this);
   }
 
-  class WebViewClientClassInner extends org.xwalk.core.XWalkResourceClient {
-    private _view: XWalkWebView;
-
-    constructor(view: XWalkWebView) {
-      super(view.android);
-
-      this._view = view;
-      const res = global.__native(this);
-
-      return res;
+  public shouldOverrideUrlLoading(view: org.xwalk.core.XWalkView, url: string) {
+    if (trace.enabled) {
+      trace.write(`XWalkResourceClient.shouldOverrideUrlLoading(${url})`, trace.categories.Debug);
     }
+    return false;
+  }
 
-    public shouldOverrideUrlLoading(view: org.xwalk.core.XWalkView, url: string) {
+  public onLoadStarted(view: org.xwalk.core.XWalkView, url: string) {
+    super.onLoadStarted(view, url);
+
+    if (view) {
       if (trace.enabled) {
-        trace.write('WebViewClientClass.shouldOverrideUrlLoading(' + url + ')', trace.categories.Debug);
+        trace.write(`XWalkResourceClient.onLoadStarted(${url})`, trace.categories.Debug);
       }
-      return false;
+      this.view._onLoadStarted(url, XWalkWebViewBase.navigationTypes[XWalkWebViewBase.navigationTypes.indexOf('linkClicked')]);
+    }
+  }
+
+  public onLoadFinished(view: org.xwalk.core.XWalkView, url: string) {
+    super.onLoadFinished(view, url);
+
+    if (view) {
+      if (trace.enabled) {
+        trace.write('XWalkResourceClient.onLoadFinished(' + url + ')', trace.categories.Debug);
+      }
+      this.view._onLoadFinished(url, undefined);
+    }
+  }
+
+  public onProgressChanged(view: org.xwalk.core.XWalkView, percent: number) {
+    if (view) {
+      this.view._onProgressChanged(percent);
+    }
+  }
+
+  public onReceivedLoadError(view: org.xwalk.core.XWalkView, errorCode: number, description: string, failingUrl: string) {
+    super.onReceivedLoadError(view, errorCode, description, failingUrl);
+
+    if (view) {
+      if (trace.enabled) {
+        trace.write(`XWalkResourceClient.onReceivedLoadError(${errorCode}, ${description}, ${failingUrl})`, trace.categories.Debug);
+      }
+
+      this.view._onLoadFinished(failingUrl, `${description} (${errorCode})`);
+    }
+  }
+
+  public onReceivedSslError(view: org.xwalk.core.XWalkView, callback: (value: boolean) => void, error: android.net.http.SslError) {
+    super.onReceivedSslError(view, callback, error);
+
+    const errorCode = error.getPrimaryError();
+    let label: string;
+    switch (errorCode) {
+      case android.net.http.SslError.SSL_DATE_INVALID: {
+        label = 'SSL_DATE_INVALID';
+        break;
+      }
+      case android.net.http.SslError.SSL_EXPIRED: {
+        label = 'SSL_EXPIRED';
+        break;
+      }
+      case android.net.http.SslError.SSL_IDMISMATCH: {
+        label = 'SSL_IDMISMATCH';
+        break;
+      }
+      case android.net.http.SslError.SSL_INVALID: {
+        label = 'SSL_INVALID';
+        break;
+      }
+      case android.net.http.SslError.SSL_MAX_ERROR: {
+        label = 'SSL_MAX_ERROR';
+        break;
+      }
+      case android.net.http.SslError.SSL_NOTYETVALID: {
+        label = 'SSL_NOTYETVALID';
+        break;
+      }
+      case android.net.http.SslError.SSL_UNTRUSTED: {
+        label = 'SSL_UNTRUSTED';
+        break;
+      }
     }
 
-    public onPageStarted(view: org.xwalk.core.XWalkView, url: string, favicon: android.graphics.Bitmap) {
-      super.onPageStarted(view, url, favicon);
+    const url = error.getUrl();
 
-      if (this._view) {
-        if (trace.enabled) {
-          trace.write('WebViewClientClass.onPageStarted(' + url + ', ' + favicon + ')', trace.categories.Debug);
-        }
-        this._view._onLoadStarted(url, XWalkWebViewBase.navigationTypes[XWalkWebViewBase.navigationTypes.indexOf('linkClicked')]);
+    if (view) {
+      if (trace.enabled) {
+        trace.write(`XWalkResourceClient.onReceivedError(${errorCode}, ${label}, ${url})`, trace.categories.Debug);
       }
+
+      this.view._onLoadFinished(url, `${label} (${errorCode})`);
     }
-
-    public onPageFinished(view: org.xwalk.core.XWalkView, url: string) {
-      super.onPageFinished(view, url);
-
-      if (this._view) {
-        if (trace.enabled) {
-          trace.write('WebViewClientClass.onPageFinished(' + url + ')', trace.categories.Debug);
-        }
-        this._view._onLoadFinished(url, undefined);
-      }
-    }
-
-    public onReceivedLoadError(view: org.xwalk.core.XWalkView, errorCode: number, description: string, failingUrl: string) {
-      super.onReceivedLoadError(view, errorCode, description, failingUrl);
-
-      if (this._view) {
-        if (trace.enabled) {
-          trace.write(`WebViewClientClass.onReceivedLoadError(${errorCode}, ${description}, ${failingUrl})`, trace.categories.Debug);
-        }
-
-        this._view._onLoadFinished(failingUrl, `${description} (${errorCode})`);
-      }
-    }
-
-    public onReceivedSslError(view: org.xwalk.core.XWalkView, callback: (value: boolean) => void, error: android.net.http.SslError) {
-      super.onReceivedSslError(view, callback, error);
-
-      const errorCode = error.getPrimaryError();
-      let label: string;
-      switch (errorCode) {
-        case android.net.http.SslError.SSL_DATE_INVALID: {
-          label = 'SSL_DATE_INVALID';
-          break;
-        }
-        case android.net.http.SslError.SSL_EXPIRED: {
-          label = 'SSL_EXPIRED';
-          break;
-        }
-        case android.net.http.SslError.SSL_IDMISMATCH: {
-          label = 'SSL_IDMISMATCH';
-          break;
-        }
-        case android.net.http.SslError.SSL_INVALID: {
-          label = 'SSL_INVALID';
-          break;
-        }
-        case android.net.http.SslError.SSL_MAX_ERROR: {
-          label = 'SSL_MAX_ERROR';
-          break;
-        }
-        case android.net.http.SslError.SSL_NOTYETVALID: {
-          label = 'SSL_NOTYETVALID';
-          break;
-        }
-        case android.net.http.SslError.SSL_UNTRUSTED: {
-          label = 'SSL_UNTRUSTED';
-          break;
-        }
-      }
-
-      const url = error.getUrl();
-
-      if (this._view) {
-        if (trace.enabled) {
-          trace.write(`WebViewClientClass.onReceivedError(${errorCode}, ${label}, ${url})`, trace.categories.Debug);
-        }
-
-        this._view._onLoadFinished(url, `${label} (${errorCode})`);
-      }
-    }
-  };
-
-  WebViewClientClass = WebViewClientClassInner;
-}
+  }
+};
 
 export class XWalkWebView extends XWalkWebViewBase {
   private _android: org.xwalk.core.XWalkView;
-  private _xWalkResourceClient: org.xwalk.core.XWalkResourceClient;
 
   constructor() {
     super();
@@ -205,16 +212,12 @@ export class XWalkWebView extends XWalkWebViewBase {
   }
 
   public _createUI() {
-    console.log('_createUI');
     this._android = new org.xwalk.core.XWalkView((<any>this)._context);
 
-    ensureWebViewClientClass();
-    this._xWalkResourceClient = new WebViewClientClass(this);
-    /*
-    this._android.getSettings().setJavaScriptEnabled(true);
-    this._android.getSettings().setBuiltInZoomControls(true);
-    */
-    this.android.setResourceClient(this._xWalkResourceClient);
+    const resourceClient = new XWalkResourceClient(this);
+    this.android.setResourceClient(resourceClient);
+
+    org.xwalk.core.XWalkPreferences.setValue(org.xwalk.core.XWalkPreferences.ALLOW_UNIVERSAL_ACCESS_FROM_FILE, true);
   }
 
   public _onDetached(force?: boolean) {
